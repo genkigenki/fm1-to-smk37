@@ -33,6 +33,9 @@ bottom row (hardware pads 8..15). The hardware index is the same for hits and LE
 | Faders | [Banks with soft takeover](#faders-banks-with-soft-takeover) | SLOOP, Makkuro37, FoMni | per-track settings, more than four jobs |
 | Faders | [What has no direct control](#faders-what-has-no-direct-control) | | the knobs already reach every parameter on screen |
 | Wheels | [Bend and vibrato, or a macro](#wheels-bend-and-vibrato-or-a-macro) | all ports | always |
+| Wheels | [Bend range setting](#wheels-bend-range-setting) | Snoop37 | the firmware has a settings menu |
+| Wheels | [Calibration in the power-on calibration](#wheels-calibration-in-the-power-on-calibration) | Snoop37 | the firmware has a hardware calibration |
+| TRS jack | [MIDI out on the TRS jack](#trs-jack-midi-out) | Snoop37 | the firmware sends MIDI over USB |
 | Knobs | [The FM-1 top row](#knobs-the-fm-1-top-row) | SLOOP, X0X, FoMni | keeping the FM-1 workflow |
 | Knobs | [A page per button, eight columns](#knobs-a-page-per-button-eight-columns) | Makkuro37 | a redesign with many parameters per voice |
 | Buttons | [Printed meaning, four extras](#buttons-printed-meaning-and-four-extras) | SLOOP, X0X, FoMni | the firmware names its buttons by function |
@@ -160,12 +163,56 @@ firmware's parameters, cross out what a knob or button already reaches, and offe
 
 ![Wheels](../assets/panel/wheels.svg)
 
-Pitch wheel = bend (SLOOP: +-7 semitones on the selected track; FoMni: +-2). Mod wheel = vibrato (SLOOP:
+Pitch wheel = bend (SLOOP: +-7 semitones on the selected track, Snoop37 2.6.4: a setting, default +-7; FoMni: +-2). Mod wheel = vibrato (SLOOP:
 10 Hz, up to +-1 semitone, up = more; FoMni: 5.5 Hz, up to +-1/2 semitone), or one performance macro. The
 wheels calibrate themselves: centre taken at power-on, the range widens as the wheel is seen to move, with a dead
 band around the centre.
 
 - **Choose:** bend and vibrato unless the instrument has one gesture worth a wheel.
+
+## Wheels: bend range setting
+
+A fixed bend range never suits everyone. Offer BEND RANGE in the settings menu, SMK builds only: +-1, 2, 3, 4, 5,
+7, 12 semitones, default the range the port had (Snoop37: 7, so an update keeps the feel). It sets the wheel on the
+internal sounds only; a MIDI IN pitch bend range the firmware already has stays separate. The bend code takes the
+range as a parameter (1/4096 semitone x range), so the range math is host-testable. Store it in a spare byte of a
+settings part the firmware already writes, 0 = the default, so older data loads as before and the FM-1 build is
+unchanged. Used in: Snoop37 (HOME menu > MIDI > BEND RANGE, K6).
+
+## Wheels: calibration in the power-on calibration
+
+The wheels' travel differs per unit (pitch ~445..640, mod ~474..629 raw on one unit), so self-calibration only
+reaches the full range once the wheel has been at its ends. Add the wheels to the firmware's hardware calibration,
+after the buttons and knobs:
+
+- **Steps:** pitch at rest, full down, full up; mod at the bottom, full up. One button (OCT+ as just taught) takes
+  each step; the screen shows the live reading. At an end, keep the furthest reading of the whole step (a wheel let
+  go a moment early still reached its end); at rest, sample 0.3 s after the press and set the dead band from the
+  noise (2 x spread + 6, 8..24 counts).
+- **Use:** move the taught ends in by 3 counts so the full travel gives the full range; widen them if the wheel goes
+  further. At power-on a pitch wheel resting within the dead band of the taught centre becomes the centre; a held
+  wheel uses the taught centre. Keep the slow drift-follow of the centre (in time, not in calls).
+- **Store:** a small object of its own (a magic, 16 bytes), not inside a settings struct whose layout other tools
+  read; none or out of range = self-calibration as before. Snoop37: `OBJ_WCAL` at 0xB1000 / 0xB2000.
+- **Safety:** a 30 s idle timeout per step keeps the old values; too little travel is refused with a message.
+
+## TRS jack: MIDI out
+
+The SMK's 3.5 mm jack is a MIDI OUT (UART1 TX on PC7); the FM-1's is MIDI IN on PH8 (a key row on the SMK: keep
+that driver off). Send the same stream as USB MIDI out: hook the one function that queues USB MIDI packets and hand
+each packet to the TRS driver too, before the "USB configured" check, so the jack works without a computer.
+
+- **Bytes:** convert each USB-MIDI packet by its CIN (8..E channel messages, C/D two bytes, F single realtime
+  bytes, 2/3 system common); drop SysEx and any packet whose status does not match its CIN (a track with MIDI OFF
+  can produce status 0xFF). No running status needed.
+- **Ring and pace:** a 256-byte ring of whole messages (a full ring drops the message, never half). Drain it from
+  the 10 kHz timer tick, nested in the audio render too: one byte when the last has gone (TPND), never a wait loop.
+  That gives ~2500 bytes/s against the line's 3125.
+- **No hang:** a byte not done in 30 ticks (3 ms) is given up; after 4 in a row the jack goes quiet until the setting
+  is set again. A setting TRS MIDI OUT ON/OFF (default ON) in the settings menu.
+- **Adapter:** the SMK-37 is listed as type A (a community spec sheet, not measured); tell users to try type B if a
+  synth does not respond.
+- **Used in:** Snoop37 2.6.4 (`hal/smk_uart_tx.h`, `src/smk_midi_out.h`), not yet confirmed on a unit.
 
 ## Knobs: the FM-1 top row
 

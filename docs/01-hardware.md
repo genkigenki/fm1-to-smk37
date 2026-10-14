@@ -367,7 +367,8 @@ conversion it also clears bit 14 of register `0x11900`, as the stock firmware do
 
 The travel is short and differs between units. The reference port calibrates itself: it takes the pitch centre at
 power-on, lets the centre follow slow drift while the wheel rests, and widens each range to the extremes it has
-seen. It uses a dead band of about 12 counts around the centre.
+seen. It uses a dead band of about 12 counts around the centre. Snoop37 2.6.4 also teaches the wheels in the
+hardware calibration (pitch: rest, full down, full up; mod: bottom, full up), for the full range on the full travel.
 
 ### 6.6 Pedal and battery
 
@@ -404,8 +405,14 @@ change to the audio driver, and the synth engines run unchanged. Status: **verif
 | USB MIDI | class-compliant, as on the FM-1 | | **verified** |
 
 **Disable the FM-1's TRS MIDI IN driver.** PH8 is a key-matrix row on the SMK-37. The reference port forces
-the UART option off for this board and fails the build if it is switched on. A MIDI OUT driver on PC7 is not
-written yet.
+the UART option off for this board and fails the build if it is switched on.
+
+MIDI OUT on PC7 (stock setup, from the v016 init): `IOMAP_CON3` bit 7 clear, bits [23:20] = 1 (UT1 TX onto an output
+channel); PC7 pull-up and pull-down set, output low, input enabled; UART1 `CON0` = 0x3400 (pendings cleared), the
+baud, then UTEN, no RX. A byte: set `CON0` bit 13 (clear TPND), write `BUF` (`0x1210C`); `CON0` bit 15 (TPND) is set
+when it has gone. Snoop37 2.6.4 has a driver built this way (status: analysis, not yet confirmed on a unit). The
+jack is listed as **type A** in a community spec sheet; M-Vave's manual only says "a 3.5 mm to MIDI adapter" (not
+measured).
 
 ## 10. USB
 
@@ -443,5 +450,5 @@ Details are in [02-update-and-recovery.md](02-update-and-recovery.md).
 | Key LEDs | 27 key LEDs | 16 RGB pads on SPI1 group B, shared with the LCD |
 | Flash | FM-1 map, JEDEC 0x856014 | SMK map with protected ranges, JEDEC 0xEB6014 added |
 | Update | identity `FM-1_9xx`, 20-block packages | identity `SMK-37 Pro_9xx`, update record name `ota-SMK-37 Pro_016`, 36-block stock packages |
-| MIDI | TRS IN on PH8 | off (PH8 is a matrix row). TRS OUT on PC7 is still to do. |
+| MIDI | TRS IN on PH8 | off (PH8 is a matrix row). TRS OUT on PC7 (UART1 TX; Snoop37 2.6.4, unconfirmed on a unit). |
 | Audio, USB, engines | | unchanged |

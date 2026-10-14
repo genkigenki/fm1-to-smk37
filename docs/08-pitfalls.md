@@ -16,6 +16,7 @@ Things that went wrong in earlier ports, and the fix. Check this list before ste
 | A fork keeps its own data in "unused" settings bytes that a later upstream release uses (felucca-rainbow's song in `favorites.factory[14..15]`, Felucca 1.2's PRESETS LIST byte). | Share the upstream data family only if the settings layouts match byte for byte; otherwise give the port its own family. |
 | Cherry-picking the Felucca layer onto an older fork: the FM-1 half of `fm1_flash_map.h` carries 1.4.1's `FL_VBANK`, and the FM-1 store range grows. | Copy the FM-1 values from the fork's own `fm1_flash.h` into `fm1_flash_map.h`, never the layer's. Check the FM-1 hashes. |
 | The first boot clears the stock firmware's settings (untagged data). | Expected with `FELUCCA_DATA_UNTAGGED_OK 0`; calibration and the way back are safe. Tell the owner before the first install. |
+| A new setting or calibration needs room, but the settings struct is read at fixed offsets (SLOOP's web editor edits bytes 48..83) and older firmware checks the object's length. | Use free bits / spare bytes (TRS MIDI OUT: settings word bit 31, 1 = OFF; BEND RANGE: a spare byte of the MIDI part, 0 = default), or a small object of its own (the wheels' calibration). Avoid `0xB0000` (the stock firmware's VM data; an untagged store keeps it); extras from `0xB1000`. Erase the extra sectors too when the owner tag changes. |
 | An upstream merge reuses a settings bit the port already uses (SLOOP 2.6's MIDI channel vs Snoop37's BOOT LOGO bits). | After every upstream merge, diff the settings struct and its bit masks. Move the port's bits to free space and migrate old values. |
 
 ## Identity, models and installers
@@ -68,7 +69,7 @@ Things that went wrong in earlier ports, and the fix. Check this list before ste
 | Fork code reads an `fm1_in` field the SMK input lacks (GHOULBOX's crank: `enc_dfr`), or counts in FM-1 frames (909/s; the SMK's are 625/s). | Add the field to `smk_input.h`; grep for frame-based timing constants. |
 | The fork refactored `key_on` (GHOULBOX: `key_on_to(t, note, chord, chn)`, no key index); the layer's `key_vel(k)` in `key_on(k)` no longer fits. | The caller passes the velocity in. |
 | Outer keys go straight to `input_on` / `input_off`: no chord, latch or split from the fork. | Route them through the fork's key_on / key_off helpers (own chord buffers, 10 slots); add them to features that list the held keys. |
-| On-screen "K1".."K4" in an FM-1 firmware means KNOB 1..4 (Snoop37's HOME menu rows); on the SMK those knobs are K5..K8 (K1..K4 are MASTER, SELECT, ALGORITHM, PRESETS). | Fix every such label behind `BOARD_SMK37` (menu rows, hints, help lines, `SMK37.md`); grep UI strings and `'1' + i` style labels. The FM-1 build stays byte-identical. |
+| On-screen "K1".."K4" in an FM-1 firmware means KNOB 1..4 (Snoop37's HOME menu rows); on the SMK those knobs are K5..K8 (K1..K4 are MASTER, SELECT, ALGORITHM, PRESETS). | Fix every such label behind `BOARD_SMK37` (menu rows, hints, help lines, `SMK37.md`); grep UI strings and `'1' + i` style labels. The hardware calibration's "KNOB 1".."KNOB 4" too (Snoop37: K2 SELECT, K3 ALGORITHM, K4 PRESETS, K5..K8). The FM-1 build stays byte-identical. |
 | A volume cap applied to the master level after `master_poll` leaves K1's virtual pot running past the cap; turning down then does nothing for many detents. | Clamp the virtual pot (`smk_master`) to the cap's pot value too (in Felucca master = pot^2 / 256). |
 
 ## Hardware
@@ -80,3 +81,7 @@ Things that went wrong in earlier ports, and the fix. Check this list before ste
 | Two-colour button LEDs: one LED index is the other half of a neighbour (SEQ PLAY's red half). | Take LED indices from the reference series, confirmed on a unit. |
 | The SMK gives no VBUS on its USB-C port. | USB host experiments need a powered hub or an external 5 V supply. |
 | Faders and wheels are noisy near the ends. | A dead band of +-1 step, ends reachable; wheels self-calibrate from the power-on centre. |
+| The FM-1's TRS MIDI IN driver (PH8) switched on for the SMK. | PH8 is a key-matrix row: keep `FELUCCA_UART` 0 and the `#error`; the SMK's jack is MIDI OUT on PC7, its own driver. |
+| PC7 driven as plain GPIO for MIDI OUT: nothing comes out. | Set it up as the stock firmware does: `IOMAP_CON3` bit 7 clear and [23:20] = 1 (UT1 TX onto an output channel), PC7 PU = 1, PD = 1, output low, DIE = 1; UART1 `CON0` 0x3400 then UTEN, `BAUD` 383 on PLL48M. Send: set `CON0` bit 13 (clear TPND), write `BUF` (0x1210C, a byte); bit 15 (TPND) when gone. PC7 is the FM-1's LCD chip select: an SMK-only setup. |
+| A blocking `putbyte` (wait for TPND) in the audio or UI path. | Poll from the timer tick, one byte per tick, with a timeout; a missing UART must never stall anything. |
+| The update loader includes `usb.c` too: a TRS hook in `midi_out_event` breaks the loader build (implicit declaration). | Guard the hook with `!defined(FELUCCA_LOADER)`. |
