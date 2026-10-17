@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/banner.png" width="100%" alt="FM-1 to SMK-37: port your FM-1 firmware to the SMK-37"></p>
+
 # FM-1 to SMK-37: run your FM-1 firmware on the SMK-37
 
 ![FM-1 firmware to SMK-37](assets/hero.png)
