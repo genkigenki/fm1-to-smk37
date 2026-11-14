@@ -177,3 +177,5 @@ The firmware code this guide refers to (Felucca, SLOOP and their SMK-37 layers) 
 repository. It is licensed under **GPL-3.0** in its own repositories, and those licenses apply to it.
 
 M-Vave, SMK-37 Pro and FM-1 are names of their respective owners. This project is not affiliated with M-Vave or JieLi.
+
+Related: try FM-1 firmwares in the browser with the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
